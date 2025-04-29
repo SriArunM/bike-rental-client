@@ -23,30 +23,28 @@ const getImageData = (
   return ctx?.getImageData(0, 0, width, height) as ImageData;
 };
 
-export const generateBlurHash = async (
-  imageFile: File
-): Promise<string | null> => {
-  const fileReader = new FileReader();
-
-  return new Promise((resolve, reject) => {
-    fileReader.onloadend = async () => {
-      try {
-        const img = await loadImage(fileReader.result as string);
-        const imageData = getImageData(img, 32, 32); // Use a smaller size for BlurHash
-        const blurHash = encode(
-          imageData.data,
-          imageData.width,
-          imageData.height,
-          4,
-          4
-        );
-        resolve(blurHash);
-      } catch (err) {
-        reject(err);
-      }
-    };
-
-    fileReader.onerror = (error) => reject(error);
-    fileReader.readAsDataURL(imageFile); // Read image as a base64 string
-  });
+export const generateBlurHash = async (imageUrl: string): Promise<string> => {
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+    
+    const width = bitmap.width;
+    const height = bitmap.height;
+    
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      throw new Error('Could not get canvas context');
+    }
+    
+    ctx.drawImage(bitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    
+    return encode(imageData.data, imageData.width, imageData.height, 4, 4);
+  } catch (error) {
+    console.error('Error generating blur hash:', error);
+    return '';
+  }
 };

@@ -65,7 +65,7 @@ export type TUrlQueryParams = { carBrand?: string; carType?: string; priceRange?
 
 export type TQueryParams = { name: string; value: string | boolean | number }[];
 
-export type TPaymentType = "cash" | "stripe" | "Aamar Pay" | "razorpay";
+export type TPaymentType = "Google Pay" | "cash" | "stripe" | "Aamar Pay" | "razorpay";
 
 export type TBooking = {
   _id: string;

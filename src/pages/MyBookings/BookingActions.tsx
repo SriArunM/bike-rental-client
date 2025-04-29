@@ -27,7 +27,6 @@ import { FaCheckCircle } from "react-icons/fa";
 import { useAppSelector } from "../../redux/hooks";
 import { selectLocation } from "../../redux/features/Map/mapSlice";
 import dayjs from "dayjs";
-import html2pdf from "html2pdf.js";
 import { useUser } from "../../hooks/useUser";
 import { useNavigate } from "react-router-dom";
 
@@ -114,34 +113,23 @@ const BookingActions = ({
 
   const paymentOptions = [
     {
+      name: "Google Pay",
+      description: "Scan QR code to make payment using Google Pay.",
+    },
+    {
       name: "Cash",
-      description:
-        "Pay in cash at the time of car pickup, It needs to be confirmed from the admin panel.",
-    },
-    {
-      name: "Stripe",
-      description: "Pay using credit/debit card via Stripe.",
-    },
-    {
-      name: "Aamar Pay",
-      description:
-        "Pay using credit/debit/bKash/Rocket/Nagad card via Aamar Pay (A Bangladeshi payment gateway).",
-    },
-    {
-      name: "QR Code",
-      description:
-        "Scan QR code to make payment using your preferred payment app.",
-    },
+      description: "Pay in cash at the time of pickup, needs admin confirmation.",
+    }
   ];
-  const handlePaymentSelection = (
-    value: "cash" | "stripe" | "Aamar Pay" | "razorpay"
-  ) => {
+
+  const handlePaymentSelection = (value: "Google Pay" | "cash") => {
     setSelectedPaymentMethod(value);
   };
 
   const handleConfirmPayment = async (cost: number) => {
     setPaymentSecret("");
     setDisableButton(true);
+    
     if (selectedPaymentMethod === "cash") {
       // Update booking with cash payment details
       const { carId, _id, ...rest } = booking;
@@ -157,86 +145,9 @@ const BookingActions = ({
       );
 
       setPaymentOpen(false);
-    } else if (selectedPaymentMethod === "stripe") {
-      const data = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/pay/create-payment-intent-stripe`,
-        { price: cost },
-        { withCredentials: true }
-      );
-      setStripeDialogOpen(true);
-      setPaymentSecret(data.data.clientSecret);
-    } else if (selectedPaymentMethod === "Aamar Pay") {
-      const data = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/pay/create-payment-intent-aamarpay`,
-        {
-          price: cost,
-          _id: booking._id,
-          user: { name: user?.name, email: user?.email, phone: user?.phone },
-        },
-        { withCredentials: true }
-      );
-
-      if (data?.data?.payment_url) {
-        window.location.href = data.data.payment_url;
-      } else {
-        setDisableButton(false);
-      }
-    } else if (selectedPaymentMethod === "razorpay") {
-      try {
-        // Create a Razorpay order
-        const orderResponse = await axios.post(
-          `${import.meta.env.VITE_BASE_URL}/pay/create-razorpay-order`,
-          { amount: cost },
-          { withCredentials: true }
-        );
-
-        if (orderResponse?.data?.id) {
-          const options = {
-            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-            amount: cost * 100, // Amount in paise
-            currency: "INR",
-            name: "SwiftRental",
-            description: "Car Rental Payment",
-            order_id: orderResponse.data.id,
-            handler: async function (response: any) {
-              // Handle successful payment
-              const { carId, _id, ...rest } = booking;
-              const bookingData = { ...rest };
-              bookingData.completedPayment = true;
-              bookingData.paymentType = "razorpay";
-              bookingData.paymentId = response.razorpay_payment_id;
-
-              if (new Date(bookingData.endDate) < new Date()) {
-                bookingData.status = "completed";
-              }
-
-              await toastPromise(
-                modifyBooking,
-                { data: bookingData, id: _id },
-                "Completing payment...",
-                "Payment completed!"
-              );
-
-              setPaymentOpen(false);
-              navigate("/dashboard/payments", { state: "recent" });
-            },
-            prefill: {
-              name: user?.name,
-              email: user?.email,
-              contact: user?.phone,
-            },
-            theme: {
-              color: "#4F46E5",
-            },
-          };
-
-          const razorpayInstance = new (window as any).Razorpay(options);
-          razorpayInstance.open();
-        }
-      } catch (error) {
-        console.error("Error processing payment:", error);
-        setDisableButton(false);
-      }
+    } else if (selectedPaymentMethod === "Google Pay") {
+      // Show QR code dialog
+      setQrDialogOpen(true);
     }
   };
 
@@ -295,26 +206,13 @@ const BookingActions = ({
 
   const downloadInvoiceAsPDF = () => {
     if (printRef.current) {
-      const invoiceContent = printRef.current.innerHTML;
+      const printContent = printRef.current.innerHTML;
+      const originalContent = document.body.innerHTML;
 
-      const tempDiv = document.createElement("div") as HTMLElement;
-      tempDiv.innerHTML = invoiceContent;
-
-      tempDiv.style.background = "white";
-      tempDiv.style.color = "black";
-      tempDiv.style.fontFamily = "Arial, sans-serif";
-      tempDiv.style.overflow = "hidden";
-      tempDiv.style.padding = "20px";
-
-      const opt = {
-        margin: 0.5,
-        filename: `invoice_${booking._id}.pdf`,
-        image: { type: "jpeg", quality: 1 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "in", format: "A4", orientation: "portrait" },
-      };
-
-      html2pdf().from(tempDiv).set(opt).save();
+      document.body.innerHTML = printContent;
+      window.print();
+      document.body.innerHTML = originalContent;
+      window.location.reload();
     }
   };
 
@@ -364,7 +262,6 @@ const BookingActions = ({
               )}
             <Button
               onClick={handlePrintInvoice}
-              variant="outline"
               className="text-foreground text-2xl"
             >
               <LiaFileInvoiceSolid />
@@ -470,41 +367,44 @@ const BookingActions = ({
 
       {/* QR Code Payment Dialog */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="backdrop-blur-lg bg-white/90 dark:bg-gray-900/90 text-black dark:text-white rounded-xl shadow-lg p-8">
+        <DialogContent className="!bg-white p-8 rounded-lg shadow-lg max-h-screen overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl text-gray-900 dark:text-white font-bold">
-              Scan QR Code to Pay
-            </DialogTitle>
-            <DialogDescription className="text-gray-600 dark:text-gray-300">
-              Scan this QR code with your preferred payment app to complete the
-              payment.
-            </DialogDescription>
+            <DialogTitle>Google Pay Payment</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col items-center justify-center p-4">
-            <div className="bg-white p-4 rounded-lg shadow-md">
-              <img
-                src={qrCodeUrl}
-                alt="Payment QR Code"
+          <div className="flex flex-col items-center space-y-4">
+            <div className="p-4 bg-white rounded-lg shadow-md">
+              <img 
+                src="/gpay-qr.png" 
+                alt="Google Pay QR Code" 
                 className="w-64 h-64"
               />
             </div>
-            <p className="mt-4 text-lg font-semibold text-gray-800 dark:text-gray-200">
-              Amount: ${booking.totalCost}
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              Booking ID: {booking._id}
-            </p>
-            <div className="mt-6">
-              <Button
-                onClick={() => {
+            <div className="text-center">
+              <p className="text-lg font-semibold">Amount to Pay: ${booking.totalCost}</p>
+              <p className="text-sm text-gray-600">Scan QR code with Google Pay app</p>
+              <p className="text-sm text-gray-600">Payment will be verified automatically</p>
+            </div>
+            <div className="flex flex-col items-center space-y-2">
+              <p className="text-sm font-medium">Payment Status:</p>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span className="text-sm">Waiting for payment...</span>
+              </div>
+            </div>
+            <Button
+              onClick={() => {
+                // Here you would typically verify the payment status
+                // For demo, we'll just close the dialog after 5 seconds
+                setTimeout(() => {
                   setQrDialogOpen(false);
                   setPaymentOpen(false);
-                }}
-                className="w-full"
-              >
-                Close
-              </Button>
-            </div>
+                  navigate("/dashboard/payments", { state: "recent" });
+                }, 5000);
+              }}
+              className="mt-4"
+            >
+              I've Made the Payment
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -699,7 +599,6 @@ const BookingActions = ({
             <Button onClick={printInvoice}>Print Invoice</Button>
             <Button onClick={downloadInvoiceAsPDF}>Download PDF</Button>
             <Button
-              variant="secondary"
               onClick={() => setPrintDialogOpen(false)}
             >
               Close

@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogTrigger,
 } from "../../components/ui/dialog";
-import html2pdf from "html2pdf.js";
 
 type ReportProps = {
   data: any;
@@ -27,26 +26,13 @@ const Report = ({ data }: ReportProps) => {
 
   const downloadDashboardReport = () => {
     if (printRef.current) {
-      const invoiceContent = printRef.current.innerHTML;
+      const printContent = printRef.current.innerHTML;
+      const originalContent = document.body.innerHTML;
 
-      const tempDiv = document.createElement("div") as HTMLElement;
-      tempDiv.innerHTML = invoiceContent;
-
-      tempDiv.style.background = "white";
-      tempDiv.style.color = "black";
-      tempDiv.style.fontFamily = "Arial, sans-serif";
-      tempDiv.style.overflow = "hidden";
-      tempDiv.style.padding = "20px";
-
-      const opt = {
-        margin: 0.5,
-        filename: `Dashboard_stats_${new Date().toDateString()}.pdf`,
-        image: { type: "jpeg", quality: 1 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "in", format: "A4", orientation: "portrait" },
-      };
-
-      html2pdf().from(tempDiv).set(opt).save();
+      document.body.innerHTML = printContent;
+      window.print();
+      document.body.innerHTML = originalContent;
+      window.location.reload();
     }
   };
 

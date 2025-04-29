@@ -11,12 +11,14 @@ import { RootState } from "../store";
 import { logout, signIn } from "../features/auth/authSlice";
 
 const baseUrl = import.meta.env.VITE_BASE_URL;
+console.log('API Base URL:', baseUrl);
 
 const baseQuery = fetchBaseQuery({
   baseUrl: baseUrl,
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth.token;
+    console.log('Current auth token:', token);
 
     if (token) {
       const tokenWithBearer = `Bearer ${token}`;
@@ -32,20 +34,21 @@ const baseQueryWithRefreshToken: BaseQueryFn<
   BaseQueryApi,
   DefinitionType
 > = async (args, api, extraOptions): Promise<any> => {
+  console.log('Making API request:', args);
   let result = await baseQuery(args, api, extraOptions);
+  console.log('API response:', result);
 
   if (result?.error?.status === 401) {
+    console.log('Token expired, attempting refresh');
     const res = await fetch(`${baseUrl}/auth/refreshToken`, {
       method: "POST",
       credentials: "include",
     });
 
     const { data } = await res.json();
-
-    console.log(data);
+    console.log('Refresh token response:', data);
 
     const user = (api.getState() as RootState).auth.user;
-
     const accessToken = data?.accessToken;
 
     if (accessToken) {
